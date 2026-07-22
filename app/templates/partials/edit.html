@@ -1,0 +1,34 @@
+<div style="margin:.5rem 0; padding:.6rem .7rem; background:#fff; border:1px solid #d0d7de;">
+{% if not d.reachable %}
+  <span class="err">⚠ {{ d.error }}</span>
+{% else %}
+  <form>
+    <input type="hidden" name="server_id" value="{{ d.server_id }}">
+    <input type="hidden" name="stack" value="{{ d.stack_name }}">
+
+    <label>Env variables (one <code>NAME=value</code> per line)</label>
+    <textarea name="env_text" rows="8"
+      style="width:100%;font-family:monospace;font-size:.8rem">{{ env_text }}</textarea>
+
+    <label style="margin-top:.5rem">compose file</label>
+    <textarea name="compose" rows="14"
+      style="width:100%;font-family:monospace;font-size:.8rem">{{ d.compose }}</textarea>
+
+    <div class="form-row" style="margin:.6rem 0">
+      <label><input type="checkbox" name="pull_image" value="true"> pull images (freshest)</label>
+      <label><input type="checkbox" name="dry_run" value="true" checked> dry-run (check only)</label>
+    </div>
+
+    <div style="display:flex; gap:.6rem; align-items:center; flex-wrap:wrap">
+      <button type="button"
+        hx-post="/tasks/stack-save/ui" hx-include="closest form"
+        hx-target="#edit-res-{{ dom_id }}" hx-swap="innerHTML">💾 Save &amp; redeploy</button>
+      <button type="button"
+        hx-post="/tasks/stack-restart/ui" hx-include="closest form"
+        hx-target="#edit-res-{{ dom_id }}" hx-swap="innerHTML">🔄 Restart</button>
+      <span class="muted">Save = PUT compose+env (redeploy). Restart = stop → start.</span>
+    </div>
+  </form>
+  <div id="edit-res-{{ dom_id }}"></div>
+{% endif %}
+</div>

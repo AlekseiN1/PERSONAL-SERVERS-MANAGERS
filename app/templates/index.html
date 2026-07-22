@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block content %}
+
+<p><a href="/">Env update</a> · <a href="/compare">Compare &amp; sync stacks</a></p>
+
+<form hx-post="/tasks/env-update/ui" hx-target="#results" hx-swap="innerHTML">
+  <h2 style="font-size:1.1rem">Update an env variable in a Portainer stack</h2>
+
+  {% if groups %}
+
+  {% if stack_names %}
+  <div>
+    <span class="muted">Quick select stacks by name (across all servers):</span>
+    <div class="chips">
+      {% for name in stack_names %}
+      <span class="chip" onclick="selectByStack('{{ name|e }}')">{{ name }}</span>
+      {% endfor %}
+      <span class="chip" onclick="selectByStack(null)">✕ clear</span>
+    </div>
+  </div>
+  {% endif %}
+
+  <table>
+    <thead>
+      <tr>
+        <th><input type="checkbox" onclick="toggleAll(this.checked)" title="Select all"></th>
+        <th>Server</th><th>IP</th><th>Port</th><th>Stacks</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for g in groups %}
+      {% set sidx = loop.index %}
+      <tr class="server-row">
+        <td>
+          {% if g.reachable and g.stacks %}
+          <input type="checkbox" class="server-cb" data-server="{{ sidx }}"
+                 onclick="toggleServer('{{ sidx }}', this.checked)">
+          {% endif %}
+        </td>
+        <td>
+          {% if g.reachable and g.stacks %}
+          <span class="toggle" onclick="toggleExpand('{{ sidx }}', this)">▶</span>
+          {% else %}<span class="toggle"></span>{% endif %}
+          {{ g.server_name }}{% if g.is_main %} <span title="main server">★</span>{% endif %}
+        </td>
+        <td>{{ g.internal_ip }}</td>
+        <td>{{ g.port }}</td>
+        <td>
+          {% if g.reachable and g.stacks %}
+            <span class="muted">{{ g.stacks|length }} stack(s) — expand to pick</span>
+          {% elif not g.reachable %}
+            <span class="err">⚠ {{ g.error }}</span>
+          {% else %}
+            <span class="muted">no stacks</span>
+          {% endif %}
+        </td>
+      </tr>
+        {% for stack in g.stacks %}
+        <tr class="stack-row" data-server="{{ sidx }}" style="display:none">
+          <td>
+            <input type="checkbox" class="stack-cb" name="targets"
+                   data-server="{{ sidx }}" data-stack="{{ stack|e }}"
+                   value="{{ g.server_id }}::{{ stack }}">
+          </td>
+          <td class="stack-cell" colspan="4">
+            {{ stack }}
+            <a class="muted" style="margin-left:.6rem" href="#"
+               hx-get="/servers/detail?server_id={{ g.server_id }}&stack={{ stack|urlencode }}"
+               hx-target="#detail-{{ sidx }}-{{ loop.index }}" hx-swap="innerHTML"
+               onclick="event.preventDefault()">ⓘ details</a>
+            <a class="muted" style="margin-left:.6rem" href="#"
+               hx-get="/servers/edit?server_id={{ g.server_id }}&stack={{ stack|urlencode }}"
+               hx-target="#detail-{{ sidx }}-{{ loop.index }}" hx-swap="innerHTML"
+               onclick="event.preventDefault()">✎ edit / restart</a>
+            <div id="detail-{{ sidx }}-{{ loop.index }}"></div>
+          </td>
+        </tr>
+        {% endfor %}
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted">Nothing selected = apply to <strong>all reachable</strong> stacks.
+    Unreachable servers (⚠) are skipped.</p>
+  {% else %}
+  <p class="muted">No servers found in Mongo. Check <code>MONGO_DB</code> and the
+    <code>servers</code> collection.</p>
+  {% endif %}
+
+  <div class="form-row">
+    <div><label>Env variable name (to change)</label><input type="text" name="key" required placeholder="e.g. MY_VAR"></div>
+    <div><label>New value</label><input type="text" name="value" required></div>
+    <div><label><input type="checkbox" name="dry_run" value="true" checked> dry-run (check only)</label></div>
+    <button type="submit">Run</button>
+  </div>
+</form>
+
+<div id="results"></div>
+
+<script>
+  function toggleExpand(sidx, el) {
+    const rows = document.querySelectorAll('tr.stack-row[data-server="' + sidx + '"]');
+    const show = rows.length && rows[0].style.display === 'none';
+    rows.forEach(r => r.style.display = show ? '' : 'none');
+    el.textContent = show ? '▼' : '▶';
+  }
+  function toggleServer(sidx, checked) {
+    document.querySelectorAll('input.stack-cb[data-server="' + sidx + '"]')
+      .forEach(c => c.checked = checked);
+  }
+  function toggleAll(checked) {
+    document.querySelectorAll('input.stack-cb').forEach(c => c.checked = checked);
+    document.querySelectorAll('input.server-cb').forEach(c => c.checked = checked);
+  }
+  function selectByStack(name) {
+    document.querySelectorAll('input.stack-cb').forEach(c => {
+      if (name === null) c.checked = false;
+      else if (c.dataset.stack === name) c.checked = true;
+    });
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,23 @@
+"""Настройки приложения из окружения / .env."""
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    portainer_user: str = ""
+    portainer_password: str = ""
+    mongo_uri: str = "mongodb://localhost:27017"
+    mongo_db: str = "servers_manager"
+    default_portainer_port: int = 9443
+    portainer_verify_tls: bool = False
+    main_server_name: str = "Nitarti-15-f375154914"  # эталон для diff/normalize/propagate
+
+    # локальный запуск (python run.py)
+    app_host: str = "127.0.0.1"
+    app_port: int = 8000
+    app_reload: bool = False
+    open_browser: bool = True  # открыть браузер при старте
+
+
+settings = Settings()

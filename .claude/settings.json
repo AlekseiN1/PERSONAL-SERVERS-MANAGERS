@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pytest:*)",
+      "Bash(python:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(uvicorn:*)",
+      "Bash(pip install:*)",
+      "Bash(pip list:*)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Edit(.env)",
+      "Write(.env)",
+      "Read(.env.local)",
+      "Edit(.env.local)",
+      "Write(.env.local)",
+      "Read(.env.*.local)",
+      "Edit(.env.*.local)",
+      "Write(.env.*.local)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/block-env.py",
+            "shell": "bash"
+          }
+        ]
+      }
+    ]
+  }
+}

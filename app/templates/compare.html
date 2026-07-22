@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block content %}
+
+<p><a href="/">Env update</a> · <a href="/compare">Compare &amp; sync stacks</a></p>
+<h2 style="font-size:1.1rem">Compare &amp; sync stacks across servers</h2>
+
+<div>
+  <span class="muted">Pick a stack name:</span>
+  <div class="chips">
+    {% for name in stack_names %}
+    <a class="chip" href="/compare?stack={{ name|urlencode }}"
+       {% if name == stack %}style="background:#e8f0fe;border-color:#1a73e8"{% endif %}>{{ name }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+{% if cmp %}
+<h3 style="font-size:1rem">Stack: <code>{{ cmp.stack_name }}</code>
+  {% if not cmp.main_present %}<span class="err">(not present on main server!)</span>{% endif %}
+</h3>
+<p class="muted">★ main server = reference ({{ cmp.main_keys|length }} env keys).
+  Diffs are shown relative to it.</p>
+
+<table>
+  <thead><tr>
+    <th>Server</th><th>Status</th><th>Missing keys (vs main)</th><th>Extra keys</th>
+  </tr></thead>
+  <tbody>
+    {% for s in cmp.servers %}
+    <tr>
+      <td>{{ s.server_name }}{% if s.is_main %} ★{% endif %}</td>
+      <td>
+        {% if not s.reachable %}<span class="err">⚠ {{ s.error }}</span>
+        {% elif s.present %}<span class="ok">present</span> ({{ s.env_keys|length }} keys)
+        {% else %}<span class="muted">missing</span>{% endif %}
+      </td>
+      <td class="err">{{ s.missing_keys|join(", ") }}</td>
+      <td class="muted">{{ s.extra_keys|join(", ") }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- Normalize keys -->
+<form hx-post="/tasks/normalize/ui" hx-target="#cmp-results" hx-swap="innerHTML"
+      style="border:1px solid #e3e3e3;padding:.7rem;margin:1rem 0">
+  <h3 style="font-size:1rem;margin-top:0">Normalize env keys to main</h3>
+  <p class="muted">Adds missing keys (with main's value) and removes extra keys.
+    Existing values on each server are kept.</p>
+  <input type="hidden" name="stack" value="{{ cmp.stack_name }}">
+  {% set norm = cmp.servers | selectattr("present") | rejectattr("is_main") | list %}
+  {% if norm %}
+    {% for s in norm %}
+    <label style="display:block">
+      <input type="checkbox" name="server_ids" value="{{ s.server_id }}"> {{ s.server_name }}
+      {% if s.missing_keys or s.extra_keys %}
+        <span class="muted">(+{{ s.missing_keys|length }} / -{{ s.extra_keys|length }})</span>
+      {% else %}<span class="muted">(aligned)</span>{% endif %}
+    </label>
+    {% endfor %}
+    <label style="display:block;margin-top:.4rem">
+      <input type="checkbox" name="dry_run" value="true" checked> dry-run (check only)</label>
+    <button type="submit" style="margin-top:.4rem">Normalize keys</button>
+  {% else %}<p class="muted">No other servers have this stack.</p>{% endif %}
+</form>
+
+<!-- Propagate to servers missing the stack -->
+{% set miss = cmp.servers | rejectattr("present") | selectattr("reachable") | rejectattr("is_main") | list %}
+{% if cmp.main_present and miss %}
+<form hx-post="/tasks/propagate/ui" hx-target="#cmp-results" hx-swap="innerHTML"
+      style="border:1px solid #e3e3e3;padding:.7rem;margin:1rem 0">
+  <h3 style="font-size:1rem;margin-top:0">Add this stack to servers that don't have it</h3>
+  <p class="muted">Creates the stack from the compose below (prefilled from main) and main's env.
+    Edit the compose if needed.</p>
+  <input type="hidden" name="stack" value="{{ cmp.stack_name }}">
+  {% for s in miss %}
+  <label style="display:block">
+    <input type="checkbox" name="server_ids" value="{{ s.server_id }}"> {{ s.server_name }}</label>
+  {% endfor %}
+  <div style="margin:.5rem 0">
+    <label>compose file (from main, editable)</label>
+    <textarea name="compose" rows="10" style="width:100%;font-family:monospace;font-size:.8rem">{{ cmp.main_compose }}</textarea>
+  </div>
+  <label style="display:block">
+    <input type="checkbox" name="dry_run" value="true" checked> dry-run (check only)</label>
+  <button type="submit" style="margin-top:.4rem">Create on selected servers</button>
+</form>
+{% endif %}
+
+<div id="cmp-results"></div>
+{% else %}
+<p class="muted">Choose a stack name above to compare it across all servers.</p>
+{% endif %}
+{% endblock %}
