@@ -15,7 +15,7 @@ router = APIRouter(prefix="/servers", tags=["servers"])
 
 
 def _dom_id(server_id: str, stack: str) -> str:
-    """Безопасный id для DOM из server_id+stack (не-alnum → '-')."""
+    """Safe DOM id from server_id+stack (non-alnum -> '-')."""
     return re.sub(r"[^A-Za-z0-9]+", "-", f"{server_id}-{stack}").strip("-")
 
 

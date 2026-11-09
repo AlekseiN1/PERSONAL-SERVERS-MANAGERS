@@ -1,7 +1,7 @@
-"""Pydantic-модели I/O.
+"""Pydantic I/O models.
 
-Коллекция `servers` принадлежит основной системе (read-only для нас). Поля документа в
-camelCase (`serverName`, `serverInternalIP`, `stacks[].stackName`) маппятся через alias.
+The `servers` collection belongs to the main system (read-only for us). Document fields
+are camelCase (`serverName`, `serverInternalIP`, `stacks[].stackName`), mapped via alias.
 """
 from typing import Literal
 
@@ -9,8 +9,8 @@ from pydantic import BaseModel, Field
 
 
 class Stack(BaseModel):
-    """Стек внутри документа сервера. stackID в Mongo — UUID, НЕ числовой Id Portainer
-    (в Portainer стек ищется по stackName)."""
+    """A stack inside a server document. stackID in Mongo is a UUID, NOT Portainer's
+    numeric Id (in Portainer, a stack is looked up by stackName)."""
 
     stack_name: str = Field(alias="stackName")
     stack_id: str | None = Field(default=None, alias="stackID")
@@ -19,13 +19,14 @@ class Stack(BaseModel):
 
 
 class Server(BaseModel):
-    """Документ коллекции servers (read-only). Маппинг camelCase-полей основной системы."""
+    """A document from the `servers` collection (read-only). Maps the main system's
+    camelCase fields."""
 
     id: str | None = Field(default=None, alias="_id")
     name: str = Field(alias="serverName")
     internal_ip: str = Field(alias="serverInternalIP")
-    port: int = 9443  # в документе нет — дефолт Portainer HTTPS
-    username: str | None = Field(default=None, alias="Username")  # обычно пусто -> .env
+    port: int = 9443  # not in the document — Portainer HTTPS default
+    username: str | None = Field(default=None, alias="Username")  # usually empty -> .env
     password: str | None = Field(default=None, alias="password")
     stacks: list[Stack] = Field(default_factory=list)
 
@@ -33,7 +34,7 @@ class Server(BaseModel):
 
 
 class StackTarget(BaseModel):
-    """Цель задачи: конкретный стек на конкретном сервере (развёрнутая пара)."""
+    """A task target: one specific stack on one specific server (an expanded pair)."""
 
     server_id: str
     server_name: str
@@ -45,12 +46,12 @@ class StackTarget(BaseModel):
 
     @property
     def token(self) -> str:
-        """Стабильный id пары для чекбоксов UI: '<server_id>::<stack_name>'."""
+        """Stable id of the pair for UI checkboxes: '<server_id>::<stack_name>'."""
         return f"{self.server_id}::{self.stack_name}"
 
 
 class ServerGroup(BaseModel):
-    """Сервер со списком его живых стеков из Portainer (или ошибка доступа). Для UI."""
+    """A server with its live stacks from Portainer (or an access error). For the UI."""
 
     server_id: str
     server_name: str
@@ -59,11 +60,11 @@ class ServerGroup(BaseModel):
     is_main: bool = False
     reachable: bool = True
     error: str | None = None
-    stacks: list[str] = Field(default_factory=list)  # имена стеков
+    stacks: list[str] = Field(default_factory=list)  # stack names
 
 
 class StackDetail(BaseModel):
-    """Детали одного стека: env, имена сервисов, compose-файл."""
+    """Details of one stack: env, service names, compose file."""
 
     server_id: str
     server_name: str
@@ -77,7 +78,7 @@ class StackDetail(BaseModel):
 
 
 class StackOnServer(BaseModel):
-    """Состояние стека с данным именем на одном сервере (для сравнения с эталоном)."""
+    """State of a stack with a given name on one server (for comparing against the reference)."""
 
     server_id: str
     server_name: str
@@ -86,12 +87,12 @@ class StackOnServer(BaseModel):
     error: str | None = None
     present: bool = False
     env_keys: list[str] = Field(default_factory=list)
-    missing_keys: list[str] = Field(default_factory=list)  # есть в main, нет тут
-    extra_keys: list[str] = Field(default_factory=list)     # есть тут, нет в main
+    missing_keys: list[str] = Field(default_factory=list)  # present in main, not here
+    extra_keys: list[str] = Field(default_factory=list)     # present here, not in main
 
 
 class StackComparison(BaseModel):
-    """Сравнение одноимённого стека по всем серверам относительно главного."""
+    """Comparison of a same-named stack across all servers against the main one."""
 
     stack_name: str
     main_present: bool
@@ -101,16 +102,16 @@ class StackComparison(BaseModel):
 
 
 class EnvUpdateRequest(BaseModel):
-    """Запрос на обновление одной env-переменной по выбранным стекам."""
+    """Request to update one env variable across selected stacks."""
 
-    targets: list[str] | Literal["all"] = "all"  # токены StackTarget.token
+    targets: list[str] | Literal["all"] = "all"  # StackTarget.token tokens
     key: str
     value: str
     dry_run: bool = True
 
 
 class TaskResult(BaseModel):
-    """Результат задачи по одному стеку."""
+    """Result of a task on one stack."""
 
     server_name: str
     stack_name: str
@@ -119,3 +120,97 @@ class TaskResult(BaseModel):
     old_value: str | None = None
     new_value: str | None = None
     dry_run: bool = False
+
+
+class BackupRequest(BaseModel):
+    """Request to back up compose+env of selected stacks."""
+
+    targets: list[str] | Literal["all"] = "all"  # StackTarget.token tokens
+    dry_run: bool = True
+
+
+class BackupResult(BaseModel):
+    """Result of backing up (compose+env) one stack."""
+
+    server_name: str
+    stack_name: str
+    ok: bool
+    message: str
+    path: str | None = None  # where it was saved (backup files directory)
+    dry_run: bool = False
+
+
+class BackupStackEntry(BaseModel):
+    """Saved backup timestamps for one stack directory on disk."""
+
+    stack_dir: str
+    timestamps: list[str] = Field(default_factory=list)  # newest first
+
+
+class BackupServerEntry(BaseModel):
+    """Saved backups for one server directory on disk, grouped by stack."""
+
+    server_dir: str
+    stacks: list[BackupStackEntry] = Field(default_factory=list)
+
+
+class BackupContent(BaseModel):
+    """Compose+env content of one saved backup, read straight off disk."""
+
+    server_name: str
+    stack_name: str
+    timestamp: str
+    compose: str = ""
+    env_text: str = ""
+    error: str | None = None
+
+
+class ImageInfo(BaseModel):
+    """One docker image on a server (from GET .../docker/images/json)."""
+
+    id: str  # "sha256:..."
+    tags: list[str] = Field(default_factory=list)  # empty/<none> -> dangling
+    size_mb: float = 0.0
+    created: int = 0  # unix timestamp
+    in_use: bool = False  # referenced by at least one container (running or stopped)
+    dangling: bool = False  # untagged (RepoTags empty or <none>:<none>)
+
+
+class ServerImages(BaseModel):
+    """Images on one server (or an access error). For the Images tab."""
+
+    server_id: str
+    server_name: str
+    is_main: bool = False
+    reachable: bool = True
+    error: str | None = None
+    images: list[ImageInfo] = Field(default_factory=list)
+
+
+class ImageDeleteResult(BaseModel):
+    """Result of deleting one image."""
+
+    server_name: str
+    image_id: str
+    ok: bool
+    message: str
+    dry_run: bool = False
+
+
+class ContainerLogs(BaseModel):
+    """Logs of one container of a stack."""
+
+    container_name: str
+    container_id: str
+    text: str = ""
+    error: str | None = None
+
+
+class StackLogs(BaseModel):
+    """Logs of all containers of one stack on one server."""
+
+    server_name: str
+    stack_name: str
+    ok: bool
+    message: str = ""
+    containers: list[ContainerLogs] = Field(default_factory=list)

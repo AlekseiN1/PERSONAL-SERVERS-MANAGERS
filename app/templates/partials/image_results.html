@@ -1,0 +1,23 @@
+<h3>Results</h3>
+{% if not results %}
+  <p class="muted">Nothing to delete.</p>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Server</th><th>Image</th><th>Status</th><th>Message</th></tr></thead>
+  <tbody>
+    {% for r in results %}
+    <tr>
+      <td>{{ r.server_name }}</td>
+      <td class="muted">{{ r.image_id[:19] + "…" if r.image_id else "—" }}</td>
+      <td class="{{ 'ok' if r.ok else 'err' }}">
+        {{ '✓ OK' if r.ok else '✗ ERROR' }}
+        {% if r.dry_run %}<span class="badge">dry-run</span>{% endif %}
+      </td>
+      <td>{{ r.message }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}

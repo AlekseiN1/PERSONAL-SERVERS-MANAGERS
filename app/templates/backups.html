@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block content %}
+
+<form hx-post="/tasks/backup/ui" hx-target="#results" hx-swap="innerHTML" class="card">
+  <h2>Backup a stack's compose + env to disk</h2>
+
+  {% if groups %}
+
+  {% if stack_names %}
+  <div>
+    <span class="muted">Quick select stacks by name (across all servers):</span>
+    <div class="chips">
+      {% for name in stack_names %}
+      <span class="chip" onclick="selectByStack('{{ name|e }}')">{{ name }}</span>
+      {% endfor %}
+      <span class="chip" onclick="selectByStack(null)">✕ clear</span>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th><input type="checkbox" onclick="toggleAll(this.checked)" title="Select all"></th>
+        <th>Server</th><th>IP</th><th>Port</th><th>Stacks</th><th>Backups</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for g in groups %}
+      {% set sidx = loop.index %}
+      {% set safe_srv = safe_path_part(g.server_name) %}
+      {% set sb = server_backups.get(safe_srv) %}
+      <tr class="server-row">
+        <td>
+          {% if g.reachable and g.stacks %}
+          <input type="checkbox" class="server-cb" data-server="{{ sidx }}"
+                 onclick="toggleServer('{{ sidx }}', this.checked)">
+          {% endif %}
+        </td>
+        <td>
+          {% if g.reachable and g.stacks %}
+          <span class="toggle" onclick="toggleExpand('{{ sidx }}', this)">▶</span>
+          {% else %}<span class="toggle"></span>{% endif %}
+          {{ g.server_name }}{% if g.is_main %} <span title="main server">★</span>{% endif %}
+        </td>
+        <td>{{ g.internal_ip }}</td>
+        <td>{{ g.port }}</td>
+        <td>
+          {% if g.reachable and g.stacks %}
+            <span class="muted">{{ g.stacks|length }} stack(s) — expand to pick</span>
+          {% elif not g.reachable %}
+            <span class="err">⚠ {{ g.error }}</span>
+          {% else %}
+            <span class="muted">no stacks</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if sb and sb[0] %}
+            <span class="ok">{{ sb[0] }} backup(s)</span>
+            <div class="muted">last: {{ fmt_ts(sb[1]) }}</div>
+          {% else %}
+            <span class="muted">no backups</span>
+          {% endif %}
+        </td>
+      </tr>
+        {% for stack in g.stacks %}
+        {% set xidx = loop.index %}
+        {% set bk = backups_map.get(safe_srv ~ '::' ~ safe_path_part(stack)) %}
+        {% set did = 'bkdlg-' ~ sidx ~ '-' ~ xidx %}
+        <tr class="stack-row" data-server="{{ sidx }}" style="display:none">
+          <td>
+            <input type="checkbox" class="stack-cb" name="targets"
+                   data-server="{{ sidx }}" data-stack="{{ stack|e }}"
+                   value="{{ g.server_id }}::{{ stack }}">
+          </td>
+          <td class="stack-cell" colspan="4">{{ stack }}</td>
+          <td>
+            {% if bk and bk.timestamps %}
+              <button type="button" class="secondary" onclick="document.getElementById('{{ did }}').showModal()">
+                🗄 {{ bk.timestamps|length }} · last {{ fmt_ts(bk.timestamps[0]) }}
+              </button>
+              <dialog id="{{ did }}">
+                <h3 style="margin-top:0">{{ g.server_name }} / {{ stack }} — backups</h3>
+                <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Timestamp</th><th></th></tr></thead>
+                  <tbody>
+                    {% for ts in bk.timestamps %}
+                    {% set rid = did ~ '-' ~ loop.index %}
+                    <tr>
+                      <td>{{ fmt_ts(ts) }}</td>
+                      <td>
+                        <span id="ctl-{{ rid }}">
+                          <input type="hidden" name="server_dir" value="{{ safe_srv }}">
+                          <input type="hidden" name="stack_dir" value="{{ bk.stack_dir }}">
+                          <input type="hidden" name="timestamp" value="{{ ts }}">
+                          <button type="button" class="secondary"
+                            hx-get="/tasks/backup-view?server_dir={{ safe_srv|urlencode }}&stack_dir={{ bk.stack_dir|urlencode }}&timestamp={{ ts }}"
+                            hx-target="#dlgres-{{ rid }}" hx-swap="innerHTML">👁 View</button>
+                          <label style="display:inline"><input type="checkbox" name="dry_run" value="true"> dry-run</label>
+                          <button type="button"
+                            hx-post="/tasks/backup-restore/ui" hx-include="#ctl-{{ rid }}"
+                            hx-target="#dlgres-{{ rid }}" hx-swap="innerHTML"
+                            hx-confirm="Restore {{ stack|e }} on {{ g.server_name|e }} from {{ fmt_ts(ts) }}?">♻ Restore</button>
+                          <button type="button" class="secondary" style="color:var(--err); border-color:var(--err)"
+                            hx-post="/tasks/backup-delete/ui" hx-include="#ctl-{{ rid }}"
+                            hx-target="#dlgres-{{ rid }}" hx-swap="innerHTML"
+                            hx-confirm="Permanently delete this backup ({{ fmt_ts(ts) }}) of {{ stack|e }} on {{ g.server_name|e }}? This cannot be undone.">🗑 Delete</button>
+                        </span>
+                      </td>
+                    </tr>
+                    <tr><td colspan="2"><div id="dlgres-{{ rid }}"></div></td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+                </div>
+                <button type="button" class="secondary" style="margin-top:.6rem"
+                  onclick="document.getElementById('{{ did }}').close()">Close</button>
+              </dialog>
+            {% else %}
+              <span class="muted">no backups</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="muted">Nothing selected = backup <strong>all reachable</strong> stacks.
+    Unreachable servers (⚠) are skipped.</p>
+  {% else %}
+  <p class="muted">No servers found in Mongo. Check <code>MONGO_DB</code> and the
+    <code>servers</code> collection.</p>
+  {% endif %}
+
+  <div class="form-row">
+    <div><label><input type="checkbox" name="dry_run" value="true"> dry-run (check only, no write to disk)</label></div>
+    <button type="submit">Backup</button>
+  </div>
+  <p class="muted">Saves the compose file and env of each selected stack under
+    <code>{{ backup_dir_abs }}\&lt;server&gt;\&lt;stack&gt;\&lt;timestamp&gt;.*</code> on this
+    machine (change the location with <code>BACKUP_DIR</code> in <code>.env</code>).</p>
+</form>
+
+<div id="results"></div>
+
+<div class="card">
+  <h2>Existing backups</h2>
+  {% if not backups %}
+  <p class="muted">No backups yet. Run a backup above first.</p>
+  {% else %}
+  {% for srv in backups %}
+  {% set sidx = loop.index %}
+  <div style="margin:.8rem 0">
+    <strong>{{ srv.server_dir }}</strong>
+    {% for st in srv.stacks %}
+    {% set kidx = loop.index %}
+    <div style="margin:.4rem 0 .4rem 1.2rem">
+      <span class="muted">{{ st.stack_dir }}</span>
+      <div class="table-wrap" style="margin:.3rem 0">
+      <table>
+        <thead><tr><th>Timestamp</th><th></th></tr></thead>
+        <tbody>
+          {% for ts in st.timestamps %}
+          {% set tidx = loop.index %}
+          {% set rid = sidx ~ '-' ~ kidx ~ '-' ~ tidx %}
+          <tr>
+            <td>{{ fmt_ts(ts) }}</td>
+            <td>
+              <span id="ctl-{{ rid }}">
+                <input type="hidden" name="server_dir" value="{{ srv.server_dir }}">
+                <input type="hidden" name="stack_dir" value="{{ st.stack_dir }}">
+                <input type="hidden" name="timestamp" value="{{ ts }}">
+                <button type="button" class="secondary"
+                  hx-get="/tasks/backup-view?server_dir={{ srv.server_dir|urlencode }}&stack_dir={{ st.stack_dir|urlencode }}&timestamp={{ ts }}"
+                  hx-target="#bk-{{ rid }}" hx-swap="innerHTML">👁 View</button>
+                <label style="display:inline"><input type="checkbox" name="dry_run" value="true"> dry-run</label>
+                <button type="button"
+                  hx-post="/tasks/backup-restore/ui" hx-include="#ctl-{{ rid }}"
+                  hx-target="#bk-{{ rid }}" hx-swap="innerHTML"
+                  hx-confirm="Restore {{ st.stack_dir }} on {{ srv.server_dir }} from {{ fmt_ts(ts) }}?">♻ Restore</button>
+                <button type="button" class="secondary" style="color:var(--err); border-color:var(--err)"
+                  hx-post="/tasks/backup-delete/ui" hx-include="#ctl-{{ rid }}"
+                  hx-target="#bk-{{ rid }}" hx-swap="innerHTML"
+                  hx-confirm="Permanently delete this backup ({{ fmt_ts(ts) }}) of {{ st.stack_dir }} on {{ srv.server_dir }}? This cannot be undone.">🗑 Delete</button>
+              </span>
+            </td>
+          </tr>
+          <tr><td colspan="2"><div id="bk-{{ rid }}"></div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+  {% endif %}
+  <p class="muted">Restore redeploys the stack from the backup's compose+env — same
+    read-modify-write + redeploy as manual "Save &amp; redeploy" (git stacks aren't
+    supported there either). Delete permanently removes the backup's files from disk —
+    both respect dry-run; uncheck it to actually apply.</p>
+</div>
+
+<script>
+  function toggleExpand(sidx, el) {
+    const rows = document.querySelectorAll('tr.stack-row[data-server="' + sidx + '"]');
+    const show = rows.length && rows[0].style.display === 'none';
+    rows.forEach(r => r.style.display = show ? '' : 'none');
+    el.textContent = show ? '▼' : '▶';
+  }
+  function toggleServer(sidx, checked) {
+    document.querySelectorAll('input.stack-cb[data-server="' + sidx + '"]')
+      .forEach(c => c.checked = checked);
+  }
+  function toggleAll(checked) {
+    document.querySelectorAll('input.stack-cb').forEach(c => c.checked = checked);
+    document.querySelectorAll('input.server-cb').forEach(c => c.checked = checked);
+  }
+  function selectByStack(name) {
+    document.querySelectorAll('input.stack-cb').forEach(c => {
+      if (name === null) c.checked = false;
+      else if (c.dataset.stack === name) c.checked = true;
+    });
+  }
+</script>
+{% endblock %}

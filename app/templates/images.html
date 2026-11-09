@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card">
+  <h2>Docker images per server</h2>
+  <p class="muted">
+    <strong>unused</strong> = not referenced by any container (running or stopped).
+    <strong>dangling</strong> = untagged (leftover layer from a rebuild). Deletion —
+    <code>DELETE /docker/images/{id}</code>, dry-run is on by default.
+  </p>
+</div>
+
+{% if not groups %}
+<p class="muted">No servers found in Mongo. Check <code>MONGO_DB</code> and the
+  <code>servers</code> collection.</p>
+{% endif %}
+
+{% for g in groups %}
+<div class="card">
+  <h3>{{ g.server_name }}{% if g.is_main %} <span title="main server">★</span>{% endif %}</h3>
+
+  {% if not g.reachable %}
+    <span class="err">⚠ {{ g.error }}</span>
+  {% elif not g.images %}
+    <p class="muted">No images.</p>
+  {% else %}
+    {% set unused = g.images|rejectattr("in_use")|list %}
+    <div id="ctl-{{ g.server_id }}" style="display:flex; align-items:center; gap:.9rem; flex-wrap:wrap; margin:.3rem 0 .8rem">
+      <input type="hidden" name="server_id" value="{{ g.server_id }}">
+      <label style="display:flex; align-items:center; gap:.35rem; margin:0">
+        <input type="checkbox" name="dry_run" value="true" checked> dry-run (check only)
+      </label>
+      <button type="button" {% if not unused %}disabled{% endif %}
+        hx-post="/tasks/images-delete-unused/ui" hx-include="#ctl-{{ g.server_id }}"
+        hx-target="#img-results-{{ g.server_id }}" hx-swap="innerHTML"
+        hx-confirm="Delete all {{ unused|length }} unused image(s) on {{ g.server_name }}?">
+        🗑 Delete all unused ({{ unused|length }})
+      </button>
+    </div>
+
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Tags</th><th>Size</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for img in g.images %}
+        <tr>
+          <td class="muted">{{ img.tags|join(", ") if img.tags else img.id[:19] + "…" }}</td>
+          <td>{{ img.size_mb }} MB</td>
+          <td>
+            {% if img.in_use %}<span class="ok">in use</span>
+            {% elif img.dangling %}<span class="err">dangling</span>
+            {% else %}<span class="err">unused</span>{% endif %}
+          </td>
+          <td>
+            {% if not img.in_use %}
+            <button type="button" class="secondary"
+              hx-post="/tasks/image-delete/ui" hx-include="#ctl-{{ g.server_id }}"
+              hx-vals='{"image_id": "{{ img.id }}"}'
+              hx-target="#img-results-{{ g.server_id }}" hx-swap="innerHTML"
+              hx-confirm="Delete image {{ (img.tags|join(', ')) or img.id[:19] }}?">delete</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% endif %}
+
+  <div id="img-results-{{ g.server_id }}"></div>
+</div>
+{% endfor %}
+{% endblock %}

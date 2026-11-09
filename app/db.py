@@ -1,4 +1,4 @@
-"""Подключение к MongoDB (motor, async)."""
+"""MongoDB connection (motor, async)."""
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 
 from app.config import settings

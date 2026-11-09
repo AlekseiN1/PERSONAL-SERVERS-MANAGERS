@@ -1,4 +1,4 @@
-"""Настройки приложения из окружения / .env."""
+"""Application settings from the environment / .env."""
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,13 +11,14 @@ class Settings(BaseSettings):
     mongo_db: str = "servers_manager"
     default_portainer_port: int = 9443
     portainer_verify_tls: bool = False
-    main_server_name: str = "Nitarti-15-f375154914"  # эталон для diff/normalize/propagate
+    main_server_name: str = "Nitarti-15-f375154914"  # reference server for diff/normalize/propagate
+    backup_dir: str = "backups"  # where stack compose+env backups get saved
 
-    # локальный запуск (python run.py)
+    # local run (python run.py)
     app_host: str = "127.0.0.1"
     app_port: int = 8000
     app_reload: bool = False
-    open_browser: bool = True  # открыть браузер при старте
+    open_browser: bool = True  # open the browser on startup
 
 
 settings = Settings()

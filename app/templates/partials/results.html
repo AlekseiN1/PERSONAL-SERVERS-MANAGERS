@@ -1,7 +1,8 @@
-<h3 style="font-size:1rem">Results</h3>
+<h3>Results</h3>
 {% if not results %}
   <p class="muted">No stacks selected / found.</p>
 {% else %}
+<div class="table-wrap">
 <table>
   <thead><tr><th>Server</th><th>Stack</th><th>Status</th><th>old → new</th><th>Message</th></tr></thead>
   <tbody>
@@ -19,4 +20,5 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% endif %}

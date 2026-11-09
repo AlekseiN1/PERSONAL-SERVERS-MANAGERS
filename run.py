@@ -1,21 +1,63 @@
-"""Точка входа для локального запуска: поднимает uvicorn и открывает браузер.
+"""Single entry point: creates the venv / installs dependencies on first run,
+starts uvicorn, and opens the browser.
 
-Браузер открывается один раз (поток-наблюдатель живёт в родительском процессе,
-поэтому перезапуски reload-воркера его не переоткрывают). Для чистого dev-режима
-без браузера по-прежнему можно запускать `uvicorn app.main:app --reload`.
+The only way to launch the app is `python run.py` (or a double-click if .py is
+associated with Python). run.bat/run.ps1 are gone: everything they used to do
+(venv, pip install) is now done by this file itself, which re-execs under the venv.
+
+For a plain dev mode without the browser, run `uvicorn app.main:app --reload`
+from an already-activated venv.
 """
-import socket
+import os
+import subprocess
 import sys
-import threading
-import time
-import webbrowser
+from pathlib import Path
 
-import uvicorn
+ROOT = Path(__file__).resolve().parent
+VENV_DIR = ROOT / ".venv"
+VENV_PYTHON = VENV_DIR / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
 
-from app.config import settings
 
-# На некоторых консолях Windows stdout не в UTF-8, и print() с кириллицей
-# падает с UnicodeEncodeError, убивая процесс до старта uvicorn.
+def _in_venv() -> bool:
+    try:
+        return Path(sys.executable).resolve() == VENV_PYTHON.resolve()
+    except OSError:
+        return False
+
+
+def _bootstrap_and_reexec() -> None:
+    """Create .venv (if missing), install dependencies, re-exec itself under the venv."""
+    if not VENV_PYTHON.exists():
+        print(f"[run] Creating virtual environment {VENV_DIR} ...")
+        subprocess.run([sys.executable, "-m", "venv", str(VENV_DIR)], check=True)
+
+    print("[run] Checking dependencies ...")
+    subprocess.run(
+        [str(VENV_PYTHON), "-m", "pip", "install", "-q", "-r", str(ROOT / "requirements.txt")],
+        check=True,
+    )
+
+    if not (ROOT / ".env").exists():
+        print("[run] WARNING: .env not found. Copy .env.example to .env and fill in the tokens.")
+
+    os.execv(str(VENV_PYTHON), [str(VENV_PYTHON), str(Path(__file__).resolve()), *sys.argv[1:]])
+
+
+if not _in_venv():
+    _bootstrap_and_reexec()
+
+# Imports that need requirements.txt's dependencies — only after the re-exec under the venv.
+import socket  # noqa: E402
+import threading  # noqa: E402
+import time  # noqa: E402
+import webbrowser  # noqa: E402
+
+import uvicorn  # noqa: E402
+
+from app.config import settings  # noqa: E402
+
+# On some Windows consoles stdout isn't UTF-8, and print() with non-ASCII characters
+# raises UnicodeEncodeError, killing the process before uvicorn even starts.
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
@@ -29,7 +71,7 @@ def _wait_and_open_browser(host: str, port: int, url: str, timeout: float = 30.0
         except OSError:
             time.sleep(0.2)
     else:
-        print(f"[run] Сервер не поднялся за {timeout:.0f}с, браузер не открываю.")
+        print(f"[run] Server didn't come up within {timeout:.0f}s, not opening the browser.")
         return
     webbrowser.open(url)
 
@@ -42,7 +84,7 @@ def main() -> None:
             args=(settings.app_host, settings.app_port, url),
             daemon=True,
         ).start()
-        print(f"Открываю {url}, как только сервер поднимется")
+        print(f"Opening {url} as soon as the server is up")
     uvicorn.run(
         "app.main:app",
         host=settings.app_host,

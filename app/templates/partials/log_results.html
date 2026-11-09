@@ -1,0 +1,18 @@
+{% if not selected %}
+  <p class="muted">Nothing selected — pick stack(s) above and click "Load logs".</p>
+{% elif not results %}
+  <p class="muted">No results.</p>
+{% else %}
+  {% for r in results %}
+  <div class="card" style="margin:.6rem 0">
+    <strong>{{ r.server_name }} / {{ r.stack_name }}</strong>
+    {% if not r.ok %}<div class="err">⚠ {{ r.message }}</div>{% endif %}
+    {% for c in r.containers %}
+    <details {% if loop.first %}open{% endif %} style="margin-top:.5rem">
+      <summary>{{ c.container_name }}{% if c.error %} <span class="err">⚠ {{ c.error }}</span>{% endif %}</summary>
+      <pre class="log-pre">{{ c.text if c.text else '(empty)' }}</pre>
+    </details>
+    {% endfor %}
+  </div>
+  {% endfor %}
+{% endif %}

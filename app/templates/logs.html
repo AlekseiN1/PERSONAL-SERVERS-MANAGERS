@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block content %}
+
+<form id="log-form" hx-post="/tasks/logs/ui" hx-target="#log-output" hx-swap="innerHTML" class="card">
+  <h2>Container logs</h2>
+  <p class="muted">Nothing loads automatically — pick the stacks you want, then click
+    "Load logs". Containers are matched to a stack by its compose-project label.</p>
+
+  {% if groups %}
+
+  {% if stack_names %}
+  <div>
+    <span class="muted">Quick select stacks by name (across all servers):</span>
+    <div class="chips">
+      {% for name in stack_names %}
+      <span class="chip" onclick="selectByStack('{{ name|e }}')">{{ name }}</span>
+      {% endfor %}
+      <span class="chip" onclick="selectByStack(null)">✕ clear</span>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th><input type="checkbox" onclick="toggleAll(this.checked)" title="Select all"></th>
+        <th>Server</th><th>IP</th><th>Port</th><th>Stacks</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for g in groups %}
+      {% set sidx = loop.index %}
+      <tr class="server-row">
+        <td>
+          {% if g.reachable and g.stacks %}
+          <input type="checkbox" class="server-cb" data-server="{{ sidx }}"
+                 onclick="toggleServer('{{ sidx }}', this.checked)">
+          {% endif %}
+        </td>
+        <td>
+          {% if g.reachable and g.stacks %}
+          <span class="toggle" onclick="toggleExpand('{{ sidx }}', this)">▶</span>
+          {% else %}<span class="toggle"></span>{% endif %}
+          {{ g.server_name }}{% if g.is_main %} <span title="main server">★</span>{% endif %}
+        </td>
+        <td>{{ g.internal_ip }}</td>
+        <td>{{ g.port }}</td>
+        <td>
+          {% if g.reachable and g.stacks %}
+            <span class="muted">{{ g.stacks|length }} stack(s) — expand to pick</span>
+          {% elif not g.reachable %}
+            <span class="err">⚠ {{ g.error }}</span>
+          {% else %}
+            <span class="muted">no stacks</span>
+          {% endif %}
+        </td>
+      </tr>
+        {% for stack in g.stacks %}
+        <tr class="stack-row" data-server="{{ sidx }}" style="display:none">
+          <td>
+            <input type="checkbox" class="stack-cb" name="targets"
+                   data-server="{{ sidx }}" data-stack="{{ stack|e }}"
+                   value="{{ g.server_id }}::{{ stack }}">
+          </td>
+          <td class="stack-cell" colspan="4">{{ stack }}</td>
+        </tr>
+        {% endfor %}
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="muted">No servers found in Mongo. Check <code>MONGO_DB</code> and the
+    <code>servers</code> collection.</p>
+  {% endif %}
+
+  <div class="form-row">
+    <div><label>Tail (lines per container)</label>
+      <input type="number" name="tail" value="200" min="10" max="2000" style="width:7rem"></div>
+    <button type="submit">Load logs</button>
+  </div>
+  <p class="muted">No stack selected = nothing loads. There is no "all" option on this tab
+    on purpose.</p>
+</form>
+
+<div id="log-viewer" class="card">
+  <div class="log-toolbar">
+    <label><input type="checkbox" id="auto-refresh-cb" onchange="updateAutoRefresh()">
+      Auto-refresh every</label>
+    <input type="number" id="auto-refresh-secs" value="5" min="2" max="300"
+           style="width:5rem" onchange="updateAutoRefresh()"> sec
+    <input type="text" id="log-filter" placeholder="Filter lines (e.g. ERROR)…" oninput="applyLogFilter()">
+    <button type="button" class="secondary" onclick="toggleFullscreen()">⛶ Fullscreen</button>
+  </div>
+  <div id="log-output"><p class="muted">Nothing loaded yet.</p></div>
+</div>
+
+<script>
+  function toggleExpand(sidx, el) {
+    const rows = document.querySelectorAll('tr.stack-row[data-server="' + sidx + '"]');
+    const show = rows.length && rows[0].style.display === 'none';
+    rows.forEach(r => r.style.display = show ? '' : 'none');
+    el.textContent = show ? '▼' : '▶';
+  }
+  function toggleServer(sidx, checked) {
+    document.querySelectorAll('input.stack-cb[data-server="' + sidx + '"]')
+      .forEach(c => c.checked = checked);
+  }
+  function toggleAll(checked) {
+    document.querySelectorAll('input.stack-cb').forEach(c => c.checked = checked);
+    document.querySelectorAll('input.server-cb').forEach(c => c.checked = checked);
+  }
+  function selectByStack(name) {
+    document.querySelectorAll('input.stack-cb').forEach(c => {
+      if (name === null) c.checked = false;
+      else if (c.dataset.stack === name) c.checked = true;
+    });
+  }
+
+  // --- auto-refresh: re-submit the same selection on a timer ---
+  let autoRefreshTimer = null;
+  function updateAutoRefresh() {
+    if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
+    const enabled = document.getElementById('auto-refresh-cb').checked;
+    if (!enabled) return;
+    const secs = Math.max(2, parseInt(document.getElementById('auto-refresh-secs').value, 10) || 5);
+    autoRefreshTimer = setInterval(() => htmx.trigger('#log-form', 'submit'), secs * 1000);
+  }
+
+  // --- keyword filter: hides non-matching lines in every rendered <pre class="log-pre"> ---
+  function applyLogFilter() {
+    const q = document.getElementById('log-filter').value.toLowerCase();
+    document.querySelectorAll('pre.log-pre').forEach(pre => {
+      if (pre.dataset.raw === undefined) pre.dataset.raw = pre.textContent;
+      const raw = pre.dataset.raw;
+      if (!q) { pre.textContent = raw; return; }
+      const filtered = raw.split('\n').filter(line => line.toLowerCase().includes(q)).join('\n');
+      pre.textContent = filtered || '(no lines match the filter)';
+    });
+  }
+  document.body.addEventListener('htmx:afterSwap', (e) => {
+    if (e.target && e.target.id === 'log-output') applyLogFilter();
+  });
+
+  function toggleFullscreen() {
+    const el = document.getElementById('log-viewer');
+    if (!document.fullscreenElement) el.requestFullscreen();
+    else document.exitFullscreen();
+  }
+</script>
+{% endblock %}

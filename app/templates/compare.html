@@ -1,26 +1,25 @@
 {% extends "base.html" %}
 {% block content %}
 
-<p><a href="/">Env update</a> · <a href="/compare">Compare &amp; sync stacks</a></p>
-<h2 style="font-size:1.1rem">Compare &amp; sync stacks across servers</h2>
+<h2>Compare &amp; sync stacks across servers</h2>
 
-<div>
+<div class="card">
   <span class="muted">Pick a stack name:</span>
   <div class="chips">
     {% for name in stack_names %}
-    <a class="chip" href="/compare?stack={{ name|urlencode }}"
-       {% if name == stack %}style="background:#e8f0fe;border-color:#1a73e8"{% endif %}>{{ name }}</a>
+    <a class="chip{% if name == stack %} active{% endif %}" href="/compare?stack={{ name|urlencode }}">{{ name }}</a>
     {% endfor %}
   </div>
 </div>
 
 {% if cmp %}
-<h3 style="font-size:1rem">Stack: <code>{{ cmp.stack_name }}</code>
+<h3>Stack: <code>{{ cmp.stack_name }}</code>
   {% if not cmp.main_present %}<span class="err">(not present on main server!)</span>{% endif %}
 </h3>
 <p class="muted">★ main server = reference ({{ cmp.main_keys|length }} env keys).
   Diffs are shown relative to it.</p>
 
+<div class="table-wrap">
 <table>
   <thead><tr>
     <th>Server</th><th>Status</th><th>Missing keys (vs main)</th><th>Extra keys</th>
@@ -40,11 +39,11 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 
 <!-- Normalize keys -->
-<form hx-post="/tasks/normalize/ui" hx-target="#cmp-results" hx-swap="innerHTML"
-      style="border:1px solid #e3e3e3;padding:.7rem;margin:1rem 0">
-  <h3 style="font-size:1rem;margin-top:0">Normalize env keys to main</h3>
+<form hx-post="/tasks/normalize/ui" hx-target="#cmp-results" hx-swap="innerHTML" class="card">
+  <h3 style="margin-top:0">Normalize env keys to main</h3>
   <p class="muted">Adds missing keys (with main's value) and removes extra keys.
     Existing values on each server are kept.</p>
   <input type="hidden" name="stack" value="{{ cmp.stack_name }}">
@@ -67,9 +66,8 @@
 <!-- Propagate to servers missing the stack -->
 {% set miss = cmp.servers | rejectattr("present") | selectattr("reachable") | rejectattr("is_main") | list %}
 {% if cmp.main_present and miss %}
-<form hx-post="/tasks/propagate/ui" hx-target="#cmp-results" hx-swap="innerHTML"
-      style="border:1px solid #e3e3e3;padding:.7rem;margin:1rem 0">
-  <h3 style="font-size:1rem;margin-top:0">Add this stack to servers that don't have it</h3>
+<form hx-post="/tasks/propagate/ui" hx-target="#cmp-results" hx-swap="innerHTML" class="card">
+  <h3 style="margin-top:0">Add this stack to servers that don't have it</h3>
   <p class="muted">Creates the stack from the compose below (prefilled from main) and main's env.
     Edit the compose if needed.</p>
   <input type="hidden" name="stack" value="{{ cmp.stack_name }}">

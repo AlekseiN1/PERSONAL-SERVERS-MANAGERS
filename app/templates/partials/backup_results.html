@@ -1,0 +1,24 @@
+<h3>Results</h3>
+{% if not results %}
+  <p class="muted">No stacks selected / found.</p>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Server</th><th>Stack</th><th>Status</th><th>Path</th><th>Message</th></tr></thead>
+  <tbody>
+    {% for r in results %}
+    <tr>
+      <td>{{ r.server_name }}</td>
+      <td>{{ r.stack_name }}</td>
+      <td class="{{ 'ok' if r.ok else 'err' }}">
+        {{ '✓ OK' if r.ok else '✗ ERROR' }}
+        {% if r.dry_run %}<span class="badge">dry-run</span>{% endif %}
+      </td>
+      <td class="muted">{{ r.path or '—' }}</td>
+      <td>{{ r.message }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}

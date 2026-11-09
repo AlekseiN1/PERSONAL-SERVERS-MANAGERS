@@ -1,4 +1,4 @@
-<div style="margin:.5rem 0; padding:.6rem .7rem; background:#fff; border:1px solid #d0d7de;">
+<div class="card" style="margin:.6rem 0">
 {% if not d.reachable %}
   <span class="err">⚠ {{ d.error }}</span>
 {% else %}
@@ -23,7 +23,7 @@
       <button type="button"
         hx-post="/tasks/stack-save/ui" hx-include="closest form"
         hx-target="#edit-res-{{ dom_id }}" hx-swap="innerHTML">💾 Save &amp; redeploy</button>
-      <button type="button"
+      <button type="button" class="secondary"
         hx-post="/tasks/stack-restart/ui" hx-include="closest form"
         hx-target="#edit-res-{{ dom_id }}" hx-swap="innerHTML">🔄 Restart</button>
       <span class="muted">Save = PUT compose+env (redeploy). Restart = stop → start.</span>

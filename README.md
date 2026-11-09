@@ -1,45 +1,47 @@
 # Personal Servers Manager
 
-Веб + Python интерфейс для управления личными серверами (Proxmox VM). Список серверов — в
-MongoDB. Задачи запускаются по выбранным серверам (все или конкретные). Первая задача —
-обновление одной env-переменной в стеке Portainer.
+A web + Python interface for managing personal servers (Proxmox VMs). The server list lives
+in MongoDB. Tasks run against selected servers (all or specific ones). The first task was
+updating a single env variable in a Portainer stack.
 
-## Стек
+## Stack
 
 FastAPI · Jinja2 + HTMX · MongoDB (motor) · httpx · pydantic-settings.
 
-## Запуск
+## Running it
 
-Скопируй `.env.example` в `.env` и заполни `PORTAINER_USER`/`PORTAINER_PASSWORD`, `MONGO_URI`
-и `MONGO_DB` (имя базы — там, где лежит коллекция `servers`). Затем:
+Copy `.env.example` to `.env` and fill in `PORTAINER_USER`/`PORTAINER_PASSWORD`, `MONGO_URI`
+and `MONGO_DB` (the database name where the `servers` collection lives). Then:
 
 ```powershell
-.\run.ps1        # PowerShell: создаст .venv, поставит зависимости, поднимет сервер
+python run.py
 ```
-или `run.bat` (двойной клик / cmd). Браузер откроется сам на http://127.0.0.1:8000
-(отключить: `OPEN_BROWSER=false` в `.env`; хост/порт — `APP_HOST`/`APP_PORT`).
 
-Вручную (если venv уже есть):
+The single entry point. On first run it creates `.venv` and installs dependencies itself,
+then re-execs under that venv and starts the server. The browser opens automatically at
+http://127.0.0.1:8000 (disable with `OPEN_BROWSER=false` in `.env`; host/port —
+`APP_HOST`/`APP_PORT`).
+
+For a plain dev mode without the browser (venv already active):
 ```powershell
-.\.venv\Scripts\python.exe run.py                       # uvicorn + авто-открытие браузера
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload   # чистый dev, без браузера
+uvicorn app.main:app --reload
 ```
 
-## Инвентарь серверов (read-only)
+## Server inventory (read-only)
 
-Список серверов берётся из коллекции `servers` основной системы — мы её **только читаем**.
-Поля документа (camelCase) маппятся в модель: `serverName`, `serverInternalIP`,
-`stacks[].stackName`. Единица работы — пара сервер×стек. Подробно —
+The server list comes from the main system's `servers` collection — we **only read** it.
+Document fields (camelCase) are mapped into the model: `serverName`, `serverInternalIP`,
+`stacks[].stackName`. The unit of work is a server×stack pair. Details:
 `.claude/skills/server-inventory/`.
 
-## Обновление env в Portainer
+## Updating env in Portainer
 
-Read-modify-write всего массива Env (`GET → правка одной строки → PUT целиком`); Portainer
-по адресу `https://{serverInternalIP}:9443`, авторизация общими логином/паролем из `.env`
-(`POST /api/auth` → JWT). Протокол и нюансы безопасности —
-`.claude/skills/portainer-env-update/`. **Сначала dry-run по всем стекам**, потом раскатка.
+Read-modify-write the whole Env array (`GET -> edit one line -> PUT the whole thing`);
+Portainer lives at `https://{serverInternalIP}:9443`, authenticated with a shared
+login/password from `.env` (`POST /api/auth` -> JWT). Protocol and safety notes —
+`.claude/skills/portainer-env-update/`. **Dry-run across all stacks first**, then roll out.
 
-## Тесты
+## Tests
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest

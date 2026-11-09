@@ -1,0 +1,14 @@
+<div class="card" style="margin:.4rem 0">
+{% if c.error %}
+  <span class="err">⚠ {{ c.error }}</span>
+{% else %}
+  <details open>
+    <summary>env ({{ c.env_text.splitlines()|length if c.env_text else 0 }} line(s))</summary>
+    <pre>{{ c.env_text if c.env_text else '(empty)' }}</pre>
+  </details>
+  <details>
+    <summary>compose</summary>
+    <pre>{{ c.compose }}</pre>
+  </details>
+{% endif %}
+</div>
